@@ -1,0 +1,20 @@
+ 
+# vCenter Server configuration
+$vcenter = “vcsa“
+$vcenteruser = “user“
+$vcenterpasswd = "passwd"
+
+# Connect to vCenter Server
+write-host “Connecting to vCenter Server $vcenter” -foreground green
+$vc = connect-viserver $vcenter -User $vcenteruser -Password $vcenterpasswd
+
+#create a new virtual switch with uplinks vmnic6 and vmnic7 on host esx-slot3.domain.local
+Get-VMHost esx-slot3.domain.local | new-virtualswitch -Name vSwitch1 -Nic vmnic6,vmnic7 -Mtu 1500
+
+#create PortGroup - VLAN 1100 - VDI, VLAN 1101 - VDI, VLAN 1102 - VDI, VLAN 1103 - VDI on host esx-slot3.domain.local 
+Get-VMHost esx-slot3.domain.local | Get-VirtualSwitch -name vSwitch1 | New-VirtualPortGroup -Name "VLAN 1100 - VDI" -VLanID 1100
+Get-VMHost esx-slot3.domain.local | Get-VirtualSwitch -name vSwitch1 | New-VirtualPortGroup -Name "VLAN 1101 - VDI" -VLanID 1101
+Get-VMHost esx-slot3.domain.local | Get-VirtualSwitch -name vSwitch1 | New-VirtualPortGroup -Name "VLAN 1102 - VDI" -VLanID 1102
+Get-VMHost esx-slot3.domain.local | Get-VirtualSwitch -name vSwitch1 | New-VirtualPortGroup -Name "VLAN 1103 - VDI" -VLanID 1103
+
+write-host “done” -foreground green
