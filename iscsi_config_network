@@ -1,0 +1,71 @@
+ #create a new virtual switch with uplinks vmnic6 and vmnic7 on host esx-slot3.domain.local
+Get-VMHost $vmhost | new-virtualswitch -Name SAN -Nic vmnic2,vmnic3 -Mtu 1500
+
+
+# SANFD1 IP, subnetmask and VLAN
+$SANFD1SwitchName="SAN"
+$SANFD1IP = “10.134.6.100“
+$SANFD1Subnet = “255.255.255.0“
+$SANFD1VLan ="1446"
+$SANFD1Name="SAN-iSCSI-vmnic2"
+
+# Creates a VMkernel port SANFD1 on vSwitch0 #
+New-VMHostNetworkAdapter -PortGroup $SANFD1Name -VirtualSwitch $SANFD1SwitchName -IP $SANFD1IP -SubnetMask $SANFD1Subnet
+Get-VirtualPortGroup -name $SANFD1Name | Set-VirtualPortGroup -VLanId $SANFD1VLan
+Get-VirtualPortGroup -name $SANFD1Name  | Get-NicTeamingPolicy | Set-NicTeamingPolicy -MakeNicActive vmnic2
+Get-VirtualPortGroup -name $SANFD1Name  | Get-NicTeamingPolicy | Set-NicTeamingPolicy -MakeNicUnused vmnic3
+
+# SANFD2 IP, subnetmask and VLAN
+$SANFD1SwitchName="SAN"
+$SANFD1IP = “10.134.7.100“
+$SANFD1Subnet = “255.255.255.0“
+$SANFD1VLan ="1446"
+$SANFD1Name="SAN-iSCSI-vmnic3"
+
+# Creates a VMkernel port SANFD1 on vSwitch0 #
+New-VMHostNetworkAdapter -PortGroup $SANFD1Name -VirtualSwitch $SANFD1SwitchName -IP $SANFD1IP -SubnetMask $SANFD1Subnet
+Get-VirtualPortGroup -name $SANFD1Name | Set-VirtualPortGroup -VLanId $SANFD1VLan
+Get-VirtualPortGroup -name $SANFD1Name  | Get-NicTeamingPolicy | Set-NicTeamingPolicy -MakeNicActive vmnic3
+Get-VirtualPortGroup -name $SANFD1Name  | Get-NicTeamingPolicy | Set-NicTeamingPolicy -MakeNicUnused vmnic2
+
+
+
+
+#Enable Software iSCSI Adapter
+Get-VMHostStorage -VMHost $vmhost | Set-VMHostStorage -SoftwareIScsiEnabled $True
+
+#set vmk2 to iscsi netwokr binding
+$esxcli = Get-EsxCli -V2 -VMHost $ESXHost
+$bind = @{
+    adapter = ($iscsiHBA = $ESXHost | Get-VMHostHba -Type iScsi | Where {$_.Model -eq "iSCSI Software Adapter"}).Device
+    force = $true
+    nic = "vmk2"
+}
+$esxcli.iscsi.networkportal.add.Invoke($bind)
+
+
+#set vmk3 to iscsi netwokr binding
+$esxcli = Get-EsxCli -V2 -VMHost $ESXHost
+$bind = @{
+    adapter = ($iscsiHBA = $ESXHost | Get-VMHostHba -Type iScsi | Where {$_.Model -eq "iSCSI Software Adapter"}).Device
+    force = $true
+    nic = "vmk3"
+}
+$esxcli.iscsi.networkportal.add.Invoke($bind)
+
+
+#iSCSI Portal Target
+$Target1 = "10.134.6.101"
+$Target2 = "10.134.6.102"
+$Target3 = "10.134.7.101"
+$Target4 = "10.134.7.102"
+
+#add dynamic targets
+get-vmhost $vmhost | Get-VMHostHba $iscsiHBA | New-IScsiHbaTarget -Address $Target1 
+get-vmhost $vmhost | Get-VMHostHba $iscsiHBA | New-IScsiHbaTarget -Address $Target2 
+get-vmhost $vmhost | Get-VMHostHba $iscsiHBA | New-IScsiHbaTarget -Address $Target3 
+get-vmhost $vmhost | Get-VMHostHba $iscsiHBA | New-IScsiHbaTarget -Address $Target4 
+
+
+#Rescan the HBA to discover any storage
+get-vmhoststorage $vmhost -rescanallhba -rescanvmfs 
